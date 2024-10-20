@@ -14,7 +14,7 @@ int main()
     //std::cout << "UUUUU" << std::endl;
     lidar->DeviceInfo();
     //std::cout << "WWWWW PPPP" << std::endl;
-    lidar->HealthStatus();
+    //lidar->HealthStatus();
     //std::cout << "FDFDSFSD" << std::endl;
     
     while (true)

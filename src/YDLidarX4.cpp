@@ -20,10 +20,10 @@ YDLidarX4::~YDLidarX4()
     delete m_lidar;
 }
 
-void YDLidarX4::Send(const uint8_t* cmd)
+void YDLidarX4::Send(const uint8_t& cmd)
 {
     m_lidar->write(&CMD_START, sizeof(CMD_START));
-    m_lidar->write(cmd, sizeof(*cmd));
+    m_lidar->write(&cmd, sizeof(cmd));
 }
 
 int YDLidarX4::StartScan(void)
@@ -38,10 +38,10 @@ int YDLidarX4::StartScan(void)
 
     //std::cout << "BBBBB" << std::endl;
     
-    Send(&CMD_START_SCAN);
+    Send(CMD_START_SCAN);
 
-    struct respHeader respHeader;
-    RespHeader(&respHeader, &CMD_START_SCAN);
+    struct RespHeader respHeader;
+    RespHeader(&respHeader, CMD_START_SCAN);
 
 
     //RespStartScan();
@@ -88,7 +88,7 @@ void YDLidarX4::StopScan(void)
     m_motor_enable = DISABLED;
     m_device_enable = DISABLED;
 
-    Send(&CMD_STOP_SCAN);
+    Send(CMD_STOP_SCAN);
 
     std::cout << "DDZDZDFEZFEZFEZ" << std::endl;
 
@@ -124,23 +124,27 @@ void YDLidarX4::DeviceInfo(void)
 {
     Flush(4);
     
-    Send(&CMD_DEVICE_INFO);
+    Send(CMD_DEVICE_INFO);
 
     std::cout << "DDS" << std::endl;
-    struct respHeader respHeader;
-    RespHeader(&respHeader, &RESP_HEADER_TYPE_DEVICE_INFO);
-    std::cout << "FZFZEFZEFZEFZEFEZFZEFEZF" << std::endl;
-    RespDeviceInfo();
+
+    struct RespHeader respHeader;
+    struct DeviceInfo deviceInfo;
+
+    RespHeader(&respHeader, RESP_HEADER_TYPE_DEVICE_INFO);
+    RespDeviceInfo(&deviceInfo);
+    RespDeviceInfo_Show(&deviceInfo);
 
     std::cout << "LLLLL" << std::endl;
 }
 
-void YDLidarX4::RespDeviceInfo(void)
+void YDLidarX4::RespDeviceInfo(struct DeviceInfo* const deviceInfo)
 {
     int currentPos = 0;
     uint8_t currentByte;
-    std::vector<uint8_t> deviceInfo;
+    std::vector<uint8_t> deviceInfoBuffer;
 
+// ==== DEBUG ====
     std::cout << "Device Info: ";
 
     while(currentPos < RESP_SIZE_DEVICE_INFO)
@@ -148,27 +152,41 @@ void YDLidarX4::RespDeviceInfo(void)
         if(m_lidar->readable() && m_lidar->read(&currentByte, sizeof(currentByte)) > 0)
         {
             std::cout << std::hex << std::bitset<8>(currentByte).to_ullong() << " ";
-            deviceInfo.push_back(currentByte);
+            deviceInfoBuffer.push_back(currentByte);
+
         }
         currentPos++;
     }
     std::cout << std::endl;
+// ===============
 
-    //==== Formatted response ====
+    deviceInfo->modelNumber = deviceInfoBuffer[0];
+    deviceInfo->firmwareVersion_major = deviceInfoBuffer[1];
+    deviceInfo->firmwareVersion_minor = deviceInfoBuffer[2];
+    deviceInfo->hardwareVersion = deviceInfoBuffer[3];
+    for(int i = 0, offset = 4 ; i < RESP_SIZE_DEVICE_INFO_SERIAL_NUMBER; i++)
+    {
+        deviceInfo->serialNumber[i] = deviceInfoBuffer[i + offset];
+    }
+}
+  
+void YDLidarX4::RespDeviceInfo_Show(const struct DeviceInfo* const deviceInfo)
+{
     std::cout << "==== Device Info ====" << std::endl;
     std::cout << std::hex;
-    std::cout << "Model number: " << std::bitset<8>(deviceInfo[0]).to_ullong() << std::endl;
-    std::cout << "Firmware version: " << std::bitset<8>(deviceInfo[2]).to_ullong() 
-        << "." << std::bitset<8>(deviceInfo[1]).to_ullong() << std::endl;
-    std::cout << "Hardware version: " << std::bitset<8>(deviceInfo[3]).to_ullong() << std::endl;
+    std::cout << "Model number: " << std::bitset<8>(deviceInfo->modelNumber).to_ullong() << std::endl;
+    std::cout << "Firmware version: " << std::bitset<8>(deviceInfo->firmwareVersion_major).to_ullong() 
+        << "." << std::bitset<8>(deviceInfo->firmwareVersion_minor).to_ullong() << std::endl;
+    std::cout << "Hardware version: " << std::bitset<8>(deviceInfo->hardwareVersion).to_ullong() << std::endl;
     std::cout << "Serial number: ";
-    for(auto it = deviceInfo.begin() + 4; it != deviceInfo.end(); it++)
+    for(int i = 0; i < RESP_SIZE_DEVICE_INFO_SERIAL_NUMBER; i++)
     {
-        std::cout << std::bitset<8>(*it).to_ullong();
+        std::cout << std::bitset<8>(deviceInfo->serialNumber[i]).to_ullong();
     }
     std::cout << std::endl;
     std::cout << "=====================" << std::endl;
 }
+
 
 void YDLidarX4::HealthStatus(void)
 {
@@ -176,42 +194,52 @@ void YDLidarX4::HealthStatus(void)
 
     std::cout << "SZFZ" << std::endl;
     
-    Send(&CMD_HEALTH_STATUS);
+    Send(CMD_HEALTH_STATUS);
 
     std::cout << "OLPALK" << std::endl;
 
-    struct respHeader respHeader;
-    RespHeader(&respHeader, &RESP_HEADER_TYPE_HEALTH_STATUS);
-
-    RespHealthStatus();
+    struct RespHeader respHeader;
+    struct HealthStatus healthStatus;
+    RespHeader(&respHeader, RESP_HEADER_TYPE_HEALTH_STATUS);
+    RespHealthStatus(&healthStatus);
+    RespHealthStatus_Show(&healthStatus);
 
     std::cout << "VUEEEKEO" << std::endl;
 }
 
-void YDLidarX4::RespHealthStatus(void)
+void YDLidarX4::RespHealthStatus(struct HealthStatus* const healthStatus)
 {
     int currentPos = 0;
     uint8_t currentByte;
-    std::vector<uint8_t> healthStatus;
+    std::vector<uint8_t> healthStatusBuffer;
 
+//==== DEBUG ====
     std::cout << "Health Status: ";
     while(currentPos < RESP_SIZE_HEALTH_STATUS)
     {
         if(m_lidar->readable() && m_lidar->read(&currentByte, sizeof(currentByte)) > 0)
         {
             std::cout << std::hex << std::bitset<8>(currentByte).to_ullong() << " ";
-            healthStatus.push_back(currentByte);
+            healthStatusBuffer.push_back(currentByte);
         }
         currentPos++;
     }
     std::cout << std::endl;
+//===============
 
-    //==== Formatted response ====
+    healthStatus->statusCode = healthStatusBuffer[0];
+    healthStatus->errorCode_lsb = healthStatusBuffer[1];
+    healthStatus->errorCode_msb = healthStatusBuffer[2];
+
+}
+
+void YDLidarX4::RespHealthStatus_Show(const struct HealthStatus* const healthStatus)
+{
     std::cout << "==== Health Status ====" << std::endl;
     std::cout << std::hex;
-    std::cout << "Status code: " << std::bitset<8>(healthStatus[0]).to_ullong() << std::endl;
-    std::cout << "Error code: " << std::bitset<8>(healthStatus[1]).to_ullong()
-        << std::bitset<8>(healthStatus[2]).to_ullong() << std::endl;
+    std::cout << "Status code: " << std::bitset<8>(healthStatus->statusCode).to_ullong() << std::endl;
+    std::cout << "Error code: " << std::bitset<8>(healthStatus->errorCode_lsb).to_ullong()
+        << std::bitset<8>(healthStatus->errorCode_msb).to_ullong() << std::endl;
     std::cout << "=======================" << std::endl;
 }
 
@@ -274,7 +302,7 @@ void YDLidarX4::Flush(int flush)
 
 
 
-bool YDLidarX4::RespHeader(struct respHeader* respHeader, const uint8_t* cmd)
+bool YDLidarX4::RespHeader(struct RespHeader* respHeader, const uint8_t& cmd)
 {
 
     //uint8_t* currentHeader = (uint8_t*) respHeader;//dynamic_cast<uint8_t*>(respHeader);
@@ -356,7 +384,7 @@ bool YDLidarX4::RespHeader(struct respHeader* respHeader, const uint8_t* cmd)
         return false;
     }
 
-    if(*cmd == CMD_START_SCAN)
+    if(cmd == CMD_START_SCAN)
     {
         if(currentHeader[6] != RESP_HEADER_TYPE_START_SCAN)
         {

@@ -15,7 +15,7 @@
 /**
   * @brief Structure which contains the lidar command response header
   */
-struct respHeader 
+struct RespHeader 
 {
     uint16_t start;
     uint32_t length:30;
@@ -26,7 +26,7 @@ struct respHeader
 /**
   * @brief Structure which contains the cloud values scanned by the lidar
   */
-struct cloudHeader
+struct CloudHeader
 {
     uint16_t ph;
     uint8_t ct;
@@ -38,6 +38,28 @@ struct cloudHeader
 } __attribute__((packed));
 
 /**
+  * @brief Structure which contains the lidar device info response content
+  */
+struct DeviceInfo
+{
+    uint8_t modelNumber;
+    uint8_t firmwareVersion_major;
+    uint8_t firmwareVersion_minor;
+    uint8_t hardwareVersion;
+    uint8_t serialNumber[16];
+} __attribute((packed));
+
+/**
+  * @brief Structure which contains the lidar health status response content
+  */
+struct HealthStatus
+{
+    uint8_t statusCode;
+    uint8_t errorCode_lsb;
+    uint8_t errorCode_msb;
+} __attribute((packed));
+
+/**
   * @brief Main class to control an YDLidarX4
   */
 class YDLidarX4
@@ -46,7 +68,7 @@ class YDLidarX4
         YDLidarX4() = delete;
 
         /**
-          * @brief
+          * @brief Main constructor to create the lidar
           *
           * @note By default, during the initialization, m_en and dev_en are disabled
           *
@@ -96,10 +118,12 @@ class YDLidarX4
         BufferedSerial* m_lidar;
 
         void Flush(int flush);
-        void Send(const uint8_t* cmd);
-        bool RespHeader(struct respHeader* respHeader, const uint8_t* cmd);
-        void RespDeviceInfo(void);
-        void RespHealthStatus(void);
+        void Send(const uint8_t& cmd);
+        bool RespHeader(struct RespHeader* respHeader, const uint8_t& cmd);
+        void RespDeviceInfo(struct DeviceInfo* const deviceInfo);
+        void RespDeviceInfo_Show(const struct DeviceInfo* const deviceInfo);
+        void RespHealthStatus(struct HealthStatus* const healthStatus);
+        void RespHealthStatus_Show(const struct HealthStatus* const healthStatus);
         void RespStopScan(void);
         void RespStartScan(void);
 
@@ -112,7 +136,6 @@ class YDLidarX4
         //Speed motor variable is used of pull-down (0V .. 5V)
         const int MOTOR_MAX_SPEED = 0;
         const int MOTOR_MIN_SPEED = 5;
-
 
         //==== CONSTANTS USED TO SEND COMMANDS TO THE LIDAR ====
         const uint8_t CMD_START = 0xA5;
@@ -136,6 +159,7 @@ class YDLidarX4
         const uint8_t RESP_HEADER_TYPE_HEALTH_STATUS = 0x06;
 
         const int RESP_SIZE_DEVICE_INFO = 20;
+        const int RESP_SIZE_DEVICE_INFO_SERIAL_NUMBER = 16;
         const int RESP_SIZE_HEALTH_STATUS = 3;
         const int RESP_SIZE_STOP_SCAN = 1;
 
