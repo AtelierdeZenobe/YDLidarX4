@@ -1,0 +1,17 @@
+{
+    "target_overrides" : {
+        "*": {
+            "target.printf_lib" : "std"
+        },
+
+        "NUCLEO_F401RE" : {
+            "platform.stdio-baud-rate": 115200,
+            "platform.default-serial-baud-rate": 115200
+        },
+
+        "NUCLEO_F446RE" : {
+            "platform.stdio-baud-rate": 115200,
+            "platform.default-serial-baud-rate": 115200
+        }
+    }
+}
