@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <iostream>
 #include <vector>
+#include <cmath>
 
 /**
   * @note Names are given in YDLIDARX4 datasheets
@@ -34,7 +35,7 @@ struct CloudHeader
     uint16_t fsa;
     uint16_t lsa;
     uint16_t cs;
-    uint16_t si;
+    //uint16_t si[360];
 } __attribute__((packed));
 
 /**
@@ -74,9 +75,10 @@ class YDLidarX4
           *
           * @param motor_enable given as m_en in the datasheet
           * @param device_enable given as dev_en in the datasheet
-          * @param motor_speedCtrl given as m_sctr in the datasheet 
+          * @param motor_speedCtrl given as m_sctr in the datasheet
+          * @param robot_radius ...
           */
-        YDLidarX4(PinName tx, PinName rx, PinName motor_enable, PinName device_enable, PinName motor_speedCtrl);
+        YDLidarX4(PinName tx, PinName rx, PinName motor_enable, PinName device_enable, PinName motor_speedCtrl, const int& robot_radius);
 
         ~YDLidarX4();
 
@@ -109,10 +111,13 @@ class YDLidarX4
           */
         void HealthStatus(void);
 
+        void CloudData_Show();
     private:
         DigitalOut m_motor_enable;
         DigitalOut m_device_enable;
         PwmOut m_motor_speedCtrl;
+
+        const int m_robot_radius;
 
         //Internal serial used to communicate with the lidar
         BufferedSerial* m_lidar;
@@ -125,13 +130,23 @@ class YDLidarX4
         void RespHealthStatus(struct HealthStatus* const healthStatus);
         void RespHealthStatus_Show(const struct HealthStatus* const healthStatus);
         void RespStopScan(void);
-        void RespStartScan(void);
+        bool RespStartScan(struct CloudHeader* const cloudHeader);
+
+
+        //==== Cloud functions ====
+        bool CloudData_Compute(const struct CloudHeader* const cloudHeader, std::vector<uint16_t>* cloudData);
+        //int CloudAngle();
+
+
 
         //Bauderate used by the lidar to communicate
         const int BAUDERATE = 128'000;
 
+        const double RAD_TO_DEG = 180.0 / std::acos(-1);
+
         const int ENABLED = 1;
         const int DISABLED = 0;
+
         
         //Speed motor variable is used of pull-down (0V .. 5V)
         const int MOTOR_MAX_SPEED = 0;
@@ -164,8 +179,10 @@ class YDLidarX4
         const int RESP_SIZE_STOP_SCAN = 1;
 
         //==== CONSTANTS USED TO GET THE CLOUD FROM THE LIDAR ====
+        const uint8_t CLOUD_HEADER_SIZE = 8;
         const uint8_t CLOUD_HEADER_START_LSB = 0xAA;
         const uint8_t CLOUD_HEADER_START_MSB = 0x55;
 
-        const int CLOUD_DATA_ARRAY_SIZE = 360; //360 values in the array corresponding to each degree of a circle
+        const static int CLOUD_DATA_ARRAY_SIZE = 360; //360 values in the array corresponding to each degree of a circle
+        int m_cloudData[CLOUD_DATA_ARRAY_SIZE] = {};
 };

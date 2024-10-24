@@ -1,7 +1,9 @@
 #include "YDLidarX4.h"
+#include <cmath>
+#include <cstdint>
 
-YDLidarX4::YDLidarX4(PinName tx, PinName rx, PinName motor_enable, PinName device_enable, PinName motor_speedCtrl)
-    : m_motor_enable(motor_enable), m_device_enable(device_enable), m_motor_speedCtrl(motor_speedCtrl)
+YDLidarX4::YDLidarX4(PinName tx, PinName rx, PinName motor_enable, PinName device_enable, PinName motor_speedCtrl, const int& robot_radius)
+    : m_motor_enable(motor_enable), m_device_enable(device_enable), m_motor_speedCtrl(motor_speedCtrl), m_robot_radius(robot_radius)
 {
     m_lidar = new BufferedSerial(tx, rx, BAUDERATE); // Lidar is only able to communicate through baud 128'000
 
@@ -10,12 +12,18 @@ YDLidarX4::YDLidarX4(PinName tx, PinName rx, PinName motor_enable, PinName devic
     m_motor_speedCtrl.write(MOTOR_MIN_SPEED);
     m_motor_speedCtrl.period_us(100);
    
-    Flush(0); //FLushes any remaining value in the buffer of the lidar before using
+    //Flush(0); //FLushes any remaining value in the buffer of the lidar before using
+
+    //StopScan();
+
+    //Flush(0);
 }
 
 YDLidarX4::~YDLidarX4()
 {
     StopScan();
+
+    std::cout << "==== OVER ====" << std::endl;
     
     delete m_lidar;
 }
@@ -41,11 +49,24 @@ int YDLidarX4::StartScan(void)
     Send(CMD_START_SCAN);
 
     struct RespHeader respHeader;
+    struct CloudHeader cloudHeader;
     RespHeader(&respHeader, CMD_START_SCAN);
 
+    RespStartScan(&cloudHeader);
+    
+    RespStartScan(&cloudHeader);
+    RespStartScan(&cloudHeader);
+    RespStartScan(&cloudHeader);
+    RespStartScan(&cloudHeader);
+    RespStartScan(&cloudHeader);
+    RespStartScan(&cloudHeader);
+    RespStartScan(&cloudHeader);
+    RespStartScan(&cloudHeader);
+    RespStartScan(&cloudHeader);
+    RespStartScan(&cloudHeader);
+    
 
-    //RespStartScan();
-
+    StopScan();
     //RespHeader contains a resp value to ensure that the scan has correctly started 
    /*int resp = 0;
 
@@ -61,24 +82,117 @@ int YDLidarX4::StartScan(void)
     return 1;
 }
 
-void YDLidarX4::RespStartScan(void)
+bool YDLidarX4::RespStartScan(struct CloudHeader* const cloudHeader)
 {
-    int currentPos = 0;
+    uint16_t currentPos = 0;
     uint8_t currentByte;
-    std::vector<uint8_t> deviceInfo;
+    std::vector<uint8_t> cloudBytes;
 
-    std::cout << "Cloud: ";
+    std::cout << "Cloud frame: ";
 
-    while(currentPos < 12)
+    int header = 0;
+
+    while(currentPos < CLOUD_HEADER_SIZE)
     {
-        if(m_lidar->readable() && m_lidar->read(&currentByte, sizeof(currentByte)) > 0)
+        if(m_lidar->read(&currentByte, sizeof(currentByte)) > 0)
         {
             std::cout << std::hex << std::bitset<8>(currentByte).to_ullong() << " ";
-            deviceInfo.push_back(currentByte);
+            cloudBytes.push_back(currentByte);
         }
         currentPos++;
     }
     std::cout << std::endl;
+
+    if(cloudBytes[0] != CLOUD_HEADER_START_LSB)
+    {
+        std::cout << "Error: CLOUD_HEADER_START_LSB failed" << std::endl;
+        return false;
+    }
+    if(cloudBytes[1] != CLOUD_HEADER_START_MSB)
+    {
+        std::cout << "Error: CLOUD_HEADER_START_MSB failed" << std::endl;
+        return false;
+    }
+
+    cloudHeader->ph = (cloudBytes[1] << 8) | cloudBytes[0];
+    cloudHeader->ct = cloudBytes[2];
+    cloudHeader->lsn = cloudBytes[3];
+    cloudHeader->fsa = ((cloudBytes[5] << 8) | cloudBytes[4]) >> 1;
+    cloudHeader->lsa = ((cloudBytes[7] << 8) | cloudBytes[6]) >> 1;
+    
+//==== DEBUG =====
+    std::cout << std::hex;
+    std::cout << "ph: " << std::bitset<16>(cloudHeader->ph).to_ullong() << std::endl;
+    std::cout << "ct: " << std::bitset<8>(cloudHeader->ct).to_ullong() << std::endl;
+    std::cout << "lsn: " << std::bitset<8>(cloudHeader->lsn).to_ullong() << std::endl;
+    std::cout << "fsa: " << std::bitset<16>(cloudHeader->fsa).to_ullong() << std::endl;
+    std::cout << "lsa: " << std::bitset<16>(cloudHeader->lsa).to_ullong() << std::endl;
+//================
+
+
+    uint8_t cloudSampleSize = cloudBytes[3] * 2 + 2; //Distance is made of two bytes
+    //cloudSampleSize += 200; //test
+    cloudBytes.clear();
+    currentPos = 0;
+
+    std::vector<uint16_t> cloudDataBytes;
+
+    std::cout << "Cloud data: ";
+    std::cout << "---- " << std::dec << +cloudSampleSize << " ----" << std::endl;
+    while(currentPos < cloudSampleSize)
+    {
+        if(m_lidar->read(&currentByte, sizeof(currentByte)) > 0)
+        {
+            std::cout << std::hex << std::bitset<8>(currentByte).to_ullong() << " ";
+            cloudBytes.push_back(currentByte);
+        }
+        currentPos++;
+
+        if(currentPos % 2 == 0)
+        {
+            uint16_t cloudData = (cloudBytes[currentPos-1] << 8) | cloudBytes[currentPos-2];
+            cloudDataBytes.push_back(cloudData);
+        }
+    }
+    std::cout << std::endl;
+
+    //if(m_lidar->read(&currentByte, sizeof(currentByte)) > 0);
+    //if(m_lidar->read(&currentByte, sizeof(currentByte)) > 0);
+
+
+    CloudData_Compute(cloudHeader, &cloudDataBytes);
+    
+/*
+    std::cout << "Cloud distance: ";
+    std::cout << std::dec;
+    for(auto it = cloudDescription.begin(); it < cloudDescription.end(); it+=2)
+    {
+        std::cout << CloudDistance(*it, *(it+1)) << " ";
+    }
+    std::cout << std::endl;
+
+*/
+
+
+
+
+/*
+
+
+
+    while(currentPos < 370)
+    {
+        if(/-*m_lidar->readable() &&*-/ m_lidar->read(&currentByte, sizeof(currentByte)) > 0)
+        {
+            std::cout << std::hex << std::bitset<8>(currentByte).to_ullong() << " ";
+            //deviceInfo.push_back(currentByte);
+        }
+        currentPos++;
+    }
+    std::cout << std::endl << std::endl;
+    */
+
+    return true;
 }
 
 void YDLidarX4::StopScan(void)
@@ -118,7 +232,6 @@ void YDLidarX4::RespStopScan(void)
     }
     std::cout << std::endl;
 }
-
 
 void YDLidarX4::DeviceInfo(void)
 {
@@ -187,7 +300,6 @@ void YDLidarX4::RespDeviceInfo_Show(const struct DeviceInfo* const deviceInfo)
     std::cout << "=====================" << std::endl;
 }
 
-
 void YDLidarX4::HealthStatus(void)
 {
     Flush(5);
@@ -230,7 +342,6 @@ void YDLidarX4::RespHealthStatus(struct HealthStatus* const healthStatus)
     healthStatus->statusCode = healthStatusBuffer[0];
     healthStatus->errorCode_lsb = healthStatusBuffer[1];
     healthStatus->errorCode_msb = healthStatusBuffer[2];
-
 }
 
 void YDLidarX4::RespHealthStatus_Show(const struct HealthStatus* const healthStatus)
@@ -282,7 +393,7 @@ void YDLidarX4::Flush(int flush)
             return;
         }*/
         m_lidar->read(&buffer, sizeof(buffer));
-        std::cout << std::hex << std::bitset<8>(buffer).to_ullong() << " ";
+        //std::cout << std::hex << std::bitset<8>(buffer).to_ullong() << " ";
         i++;
     }
     std::cout << std::endl;
@@ -362,7 +473,7 @@ bool YDLidarX4::RespHeader(struct RespHeader* respHeader, const uint8_t& cmd)
         //currentHeaderPos++;
     }
 
-    //std::cout << "Vectorizing..." << std::endl;
+    std::cout << "Command: ";
     for(int i = 0; i < currentHeader.size(); i++)
     {
         std::cout << std::hex << std::bitset<8>(currentHeader[i]).to_ullong() << " ";
@@ -402,3 +513,57 @@ bool YDLidarX4::RespHeader(struct RespHeader* respHeader, const uint8_t& cmd)
     return true;
 }
 
+bool YDLidarX4::CloudData_Compute(const struct CloudHeader* const cloudHeader, std::vector<uint16_t>* cloudData)
+{
+    double angle_fsa = cloudHeader->fsa / 64.0;
+    double angle_lsa = cloudHeader->lsa / 64.0;
+    double angle_i = cloudHeader->lsn != 1 ? 
+        ((cloudHeader->lsa - cloudHeader->fsa) / 64.0) / (cloudHeader->lsn - 1) : 0;
+
+    /*
+    if(cloudData->size() != cloudHeader->lsn)
+    {
+        std::cout << "Error: cloudData and lsn are not the same size" << std::endl;
+        return false;
+    }
+    */
+
+    std::cout << "Angle: " << angle_fsa << " " << angle_lsa << " " << angle_i << std::endl;
+    std::cout << "Points: ";
+
+    for(int i = 0; i < cloudData->size(); i++)
+    {
+        int distance = (*cloudData)[i] / 4;
+        /*
+        if(distance <= m_robot_radius) //No need to compute an invalid value
+        {
+            continue;
+        }
+        */
+
+        double angle_correction = distance != 0.0 ? 
+            RAD_TO_DEG * std::atan2(21.8 * (155.3 - distance), 155.3 * distance) : 0;
+        int angle = std::fmod(angle_fsa + angle_i * (i) + angle_correction, 360);
+        
+        m_cloudData[angle] = distance;
+        
+
+        std::cout << std::dec << distance << " " << angle << " | "; 
+    }
+    std::cout << std::endl;
+
+    return true;
+}
+
+void YDLidarX4::CloudData_Show(void)
+{
+    std::cout << "==== Points ====" << std::endl;
+    std::cout << std::dec;
+    for(int i = 0; i < CLOUD_DATA_ARRAY_SIZE; i++)
+    {
+        std::cout << i << " " << m_cloudData[i] << " | ";
+    }
+    std::cout << std::endl;
+    std::cout << "================";
+    std::cout << std::endl;
+}
