@@ -6,8 +6,12 @@
 
 int main()
 {
+    EventQueue evQueue;
+    Thread eventThread;
+    eventThread.start(callback(&evQueue, &EventQueue::dispatch_forever));
+
     int robot_radius = 250;
-    auto lidar = new YDLidarX4(PIN_TX, PIN_RX, PIN_MOTOR_ENABLE, PIN_DEVICE_ENABLE, PIN_MOTOR_SPEEDCTRL, robot_radius);
+    auto lidar = new YDLidarX4(&evQueue, PIN_TX, PIN_RX, PIN_MOTOR_ENABLE, PIN_DEVICE_ENABLE, PIN_MOTOR_SPEEDCTRL, robot_radius);
     //std::cout << "SSSSS" << std::endl;
     lidar->StopScan();
     //std::cout << "TTTTT" << std::endl;
@@ -19,7 +23,7 @@ int main()
     //std::cout << "FDFDSFSD" << std::endl;
     //lidar->CloudAngle();
     
-    //lidar->CloudData_Show();
+    lidar->CloudData_Show();
 
 
     while (true)
@@ -27,4 +31,3 @@ int main()
 
     }
 }
-

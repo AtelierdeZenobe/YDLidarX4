@@ -35,7 +35,6 @@ struct CloudHeader
     uint16_t fsa;
     uint16_t lsa;
     uint16_t cs;
-    //uint16_t si[360];
 } __attribute__((packed));
 
 /**
@@ -78,7 +77,7 @@ class YDLidarX4
           * @param motor_speedCtrl given as m_sctr in the datasheet
           * @param robot_radius ...
           */
-        YDLidarX4(PinName tx, PinName rx, PinName motor_enable, PinName device_enable, PinName motor_speedCtrl, const int& robot_radius);
+        YDLidarX4(EventQueue* evQueue, PinName tx, PinName rx, PinName motor_enable, PinName device_enable, PinName motor_speedCtrl, const int& robot_radius);
 
         ~YDLidarX4();
 
@@ -112,10 +111,13 @@ class YDLidarX4
         void HealthStatus(void);
 
         void CloudData_Show();
+
     private:
         DigitalOut m_motor_enable;
         DigitalOut m_device_enable;
         PwmOut m_motor_speedCtrl;
+
+        EventQueue* m_evQueue;
 
         const int m_robot_radius;
 
@@ -133,12 +135,20 @@ class YDLidarX4
         bool RespStartScan(struct CloudHeader* const cloudHeader);
 
 
+
         //==== Cloud functions ====
         bool CloudData_Compute(const struct CloudHeader* const cloudHeader, std::vector<uint16_t>* cloudData);
-        //int CloudAngle();
+        
+        /**
+          * @brief Function used to check if the received cloud data are corrupted or not
+          *
+          * @param cloudHeader the cloudHeader package sent by the lidar
+          * @param cloudData the cloudData package sent by the lidar
+          */
+        bool CheckSum(const struct CloudHeader* const cloudHeader, std::vector<uint16_t>* cloudData);
 
 
-
+ 
         //Bauderate used by the lidar to communicate
         const int BAUDERATE = 128'000;
 
@@ -179,7 +189,7 @@ class YDLidarX4
         const int RESP_SIZE_STOP_SCAN = 1;
 
         //==== CONSTANTS USED TO GET THE CLOUD FROM THE LIDAR ====
-        const uint8_t CLOUD_HEADER_SIZE = 8;
+        const uint8_t CLOUD_HEADER_SIZE = 10;
         const uint8_t CLOUD_HEADER_START_LSB = 0xAA;
         const uint8_t CLOUD_HEADER_START_MSB = 0x55;
 
