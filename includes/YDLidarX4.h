@@ -145,7 +145,7 @@ class YDLidarX4
           * @param cloudHeader the cloudHeader package sent by the lidar
           * @param cloudData the cloudData package sent by the lidar
           */
-        bool CheckSum(const struct CloudHeader* const cloudHeader, std::vector<uint16_t>* cloudData);
+        bool Checksum(const struct CloudHeader* const cloudHeader, std::vector<uint16_t>* cloudData);
 
 
  
@@ -189,9 +189,8 @@ class YDLidarX4
         const int RESP_SIZE_STOP_SCAN = 1;
 
         //==== CONSTANTS USED TO GET THE CLOUD FROM THE LIDAR ====
-        const uint8_t CLOUD_HEADER_SIZE = 10;
-        const uint8_t CLOUD_HEADER_START_LSB = 0xAA;
-        const uint8_t CLOUD_HEADER_START_MSB = 0x55;
+        const uint16_t CLOUD_HEADER_SIZE = 0x5;
+        const uint16_t CLOUD_HEADER_START = 0xaa55;
 
         const static int CLOUD_DATA_ARRAY_SIZE = 360; //360 values in the array corresponding to each degree of a circle
         int m_cloudData[CLOUD_DATA_ARRAY_SIZE] = {};

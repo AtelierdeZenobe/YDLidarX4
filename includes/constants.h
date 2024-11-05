@@ -22,6 +22,13 @@
 
 #endif
 
+#define FALSE 0
+#define TRUE !FALSE //Any value except 0 is meant to be true
+
+//Change bool value to switch from debug to release version
+#define _DEBUG_ TRUE
+
+
 
 
 

@@ -1,4 +1,5 @@
 #include "YDLidarX4.h"
+#include <bitset>
 #include <cmath>
 #include <cstdint>
 
@@ -92,65 +93,88 @@ int YDLidarX4::StartScan(void)
 
 bool YDLidarX4::RespStartScan(struct CloudHeader* const cloudHeader)
 {
-    uint16_t currentPos = 0;
-    uint8_t currentByte;
-    std::vector<uint8_t> cloudBytes;
+    //Swap the byte to get the order used by the developers
+    //Example : 0xa1b2 -> 0xb2a1
+    auto swapCurrentByte = [](uint16_t& currentByte16){
+        return (currentByte16 & 0xff) << 8 | currentByte16 >> 8;
+    };
 
+    uint16_t currentPos = 0x0;
+    uint16_t currentByte16;
+    std::vector<uint16_t> cloudBytes16;
+
+    bool started = false;
     std::cout << "Cloud frame: ";
-
-    bool start_done = false;
-
     while(currentPos < CLOUD_HEADER_SIZE)
     {
-        while(start_done == false && m_lidar->read(&currentByte, sizeof(currentByte)) > 0)
+        while(started == false && m_lidar->read(&currentByte16, sizeof(currentByte16)) > 0)
         {
-            if(currentByte == 0xaa)
+            if(currentByte16 == CLOUD_HEADER_START)
             {
-                if(m_lidar->read(&currentByte, sizeof(currentByte)) > 0 && currentByte == 0x55)
-                {
-                    std::cout << std::hex << std::bitset<8>(0xaa).to_ullong() << " ";
-                    std::cout << std::hex << std::bitset<8>(0x55).to_ullong() << " ";
-                    cloudBytes.push_back(0xaa);
-                    cloudBytes.push_back(0x55);
-                    currentPos += 2;
-                    start_done = true;
-                    break;
-                }
-                else 
-                {
-                    continue;
-                }
+                std::cout << std::hex << std::bitset<16>(currentByte16).to_ullong() << " ";
+                cloudBytes16.push_back(currentByte16);
+                currentPos++;
+                started = true;
+                break;
+            }
+            else
+            {
+                continue;
             }
         }
 
-        if(m_lidar->read(&currentByte, sizeof(currentByte)) > 0)
+        std:cout << " /////////////////// "; //Temporization?
+
+        if(m_lidar->read(&currentByte16, sizeof(currentByte16)) > 0)
         {
-            std::cout << std::hex << std::bitset<8>(currentByte).to_ullong() << " ";
-            cloudBytes.push_back(currentByte);
+            std::cout << "(" << std::hex << std::bitset<16>(currentByte16).to_ullong() << ") ";
+            currentByte16 = swapCurrentByte(currentByte16);
+            std::cout << std::hex << std::bitset<16>(currentByte16).to_ullong() << " | ";
+            cloudBytes16.push_back(currentByte16);
         }
+
         currentPos++;
     }
     std::cout << std::endl;
 
-    if(cloudBytes[0] != CLOUD_HEADER_START_LSB)
-    {
-        std::cout << "Error: CLOUD_HEADER_START_LSB failed" << std::endl;
-        return false;
-    }
-    if(cloudBytes[1] != CLOUD_HEADER_START_MSB)
-    {
-        std::cout << "Error: CLOUD_HEADER_START_MSB failed" << std::endl;
-        return false;
-    }
-
-    cloudHeader->ph = (cloudBytes[1] << 8) | cloudBytes[0];
-    cloudHeader->ct = cloudBytes[2];
-    cloudHeader->lsn = cloudBytes[3];
-    cloudHeader->fsa = ((cloudBytes[5] << 8) | cloudBytes[4]) >> 1;
-    cloudHeader->lsa = ((cloudBytes[7] << 8) | cloudBytes[6]) >> 1;
-    cloudHeader->cs = (cloudBytes[9] << 8) | cloudBytes[8];
-    
 //==== DEBUG =====
+#if _DEBUG_ == TRUE
+    std::cout << std::hex;
+    for(const auto& cloudByte16 : cloudBytes16)
+    {
+        std::cout << std::bitset<16>(cloudByte16).to_ullong() << " - ";
+    }
+    std::cout << std::endl;
+#endif
+//================
+
+    cloudHeader->ph = cloudBytes16[0];
+    cloudHeader->ct = cloudBytes16[1] >> 8;
+    cloudHeader->lsn = cloudBytes16[1] & 0xff;
+    cloudHeader->fsa = cloudBytes16[2];
+    cloudHeader->lsa = cloudBytes16[3];
+    cloudHeader->cs = cloudBytes16[4];
+
+    std::cout << "Cloud data: ";
+    std::cout << "---- " << std::dec << +cloudHeader->lsn << " ----" << std::endl;
+    cloudBytes16.clear();
+    currentPos = 0;
+    while(currentPos < cloudHeader->lsn)
+    {
+        if(m_lidar->read(&currentByte16, sizeof(currentByte16)) > 0)
+        {
+            std::cout << "(" << std::hex << std::bitset<16>(currentByte16).to_ullong() << ") ";
+            currentByte16 = swapCurrentByte(currentByte16);
+            std::cout << std::hex << std::bitset<16>(currentByte16).to_ullong() << " ";
+            cloudBytes16.push_back(currentByte16);
+        }
+
+        currentPos++;
+    }
+    std::cout << std::endl;
+
+//==== DEBUG =====
+#if _DEBUG_ == TRUE
     std::cout << std::hex;
     std::cout << "ph: " << std::bitset<16>(cloudHeader->ph).to_ullong() << std::endl;
     std::cout << "ct: " << std::bitset<8>(cloudHeader->ct).to_ullong() << std::endl;
@@ -158,9 +182,19 @@ bool YDLidarX4::RespStartScan(struct CloudHeader* const cloudHeader)
     std::cout << "fsa: " << std::bitset<16>(cloudHeader->fsa).to_ullong() << std::endl;
     std::cout << "lsa: " << std::bitset<16>(cloudHeader->lsa).to_ullong() << std::endl;
     std::cout << "cs: " << std::bitset<16>(cloudHeader->cs).to_ullong() << std::endl;
+#endif
 //================
 
+    if(!Checksum(cloudHeader, &cloudBytes16))
+    {
+        std::cout << "Error: Cloud checksum failed" << std::endl;
+        return false;
+    }
 
+    //CloudData_Compute(cloudHeader, &cloudBytes16);
+
+    return true;
+/*
     uint8_t cloudSampleSize = cloudBytes[3] * 2; //Distance is made of two bytes
     //cloudSampleSize += 200; //test
     cloudBytes.clear();
@@ -190,9 +224,14 @@ bool YDLidarX4::RespStartScan(struct CloudHeader* const cloudHeader)
     //if(m_lidar->read(&currentByte, sizeof(currentByte)) > 0);
     //if(m_lidar->read(&currentByte, sizeof(currentByte)) > 0);
 
+    if(!Checksum(cloudHeader, &cloudBytes16))
+    {
+        std::cout << "Error: Cloud checksum failed" << std::endl;
+        return false;
+    }
 
-    CloudData_Compute(cloudHeader, &cloudDataBytes);
-    
+    CloudData_Compute(cloudHeader, &cloudBytes16);
+    */
 /*
     std::cout << "Cloud distance: ";
     std::cout << std::dec;
@@ -204,24 +243,6 @@ bool YDLidarX4::RespStartScan(struct CloudHeader* const cloudHeader)
 
 */
 
-
-
-
-/*
-
-
-
-    while(currentPos < 370)
-    {
-        if(/-*m_lidar->readable() &&*-/ m_lidar->read(&currentByte, sizeof(currentByte)) > 0)
-        {
-            std::cout << std::hex << std::bitset<8>(currentByte).to_ullong() << " ";
-            //deviceInfo.push_back(currentByte);
-        }
-        currentPos++;
-    }
-    std::cout << std::endl << std::endl;
-    */
 
     return true;
 }
@@ -583,6 +604,8 @@ bool YDLidarX4::CloudData_Compute(const struct CloudHeader* const cloudHeader, s
     }
     std::cout << std::endl;
 
+    Checksum(cloudHeader, cloudData);
+
     return true;
 }
 
@@ -599,14 +622,25 @@ void YDLidarX4::CloudData_Show(void)
     std::cout << std::endl;
 }
 
-bool YDLidarX4::CheckSum(const struct CloudHeader* const cloudHeader, std::vector<uint16_t>* cloudData)
+bool YDLidarX4::Checksum(const struct CloudHeader* const cloudHeader, std::vector<uint16_t>* cloudData)
 {
-   uint16_t checksum;
+    uint16_t checksum = 0x0;
 
-   checksum = cloudHeader->ph;
-   checksum ^= cloudHeader->fsa;
-   checksum ^= cloudHeader->lsa;
+    checksum ^= cloudHeader->ph;
+    checksum ^= cloudHeader->fsa;
+    checksum ^= cloudHeader->lsa;
+    checksum ^= (cloudHeader->ct << 8 | cloudHeader->lsn);
 
+    for(const auto& it : *cloudData)
+    {
+        checksum ^= it;
+    }
+    
+//==== DEBUG ====
+#if _DEBUG_ == TRUE
+    std::cout << "Checksum: " << std::hex << std::bitset<16>(checksum).to_ullong() << std::endl;
+#endif
+//===============
 
     return checksum == cloudHeader->cs;
 }

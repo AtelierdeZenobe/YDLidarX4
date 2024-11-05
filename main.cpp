@@ -23,7 +23,7 @@ int main()
     //std::cout << "FDFDSFSD" << std::endl;
     //lidar->CloudAngle();
     
-    lidar->CloudData_Show();
+    //lidar->CloudData_Show();
 
 
     while (true)
