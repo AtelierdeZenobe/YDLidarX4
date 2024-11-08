@@ -191,47 +191,10 @@ bool YDLidarX4::RespStartScan(struct CloudHeader* const cloudHeader)
         return false;
     }
 
-    //CloudData_Compute(cloudHeader, &cloudBytes16);
+    CloudData_Compute(cloudHeader, &cloudBytes16);
 
     return true;
-/*
-    uint8_t cloudSampleSize = cloudBytes[3] * 2; //Distance is made of two bytes
-    //cloudSampleSize += 200; //test
-    cloudBytes.clear();
-    currentPos = 0;
 
-    std::vector<uint16_t> cloudDataBytes;
-
-    std::cout << "Cloud data: ";
-    std::cout << "---- " << std::dec << +cloudSampleSize << " ----" << std::endl;
-    while(currentPos < cloudSampleSize)
-    {
-        if(m_lidar->read(&currentByte, sizeof(currentByte)) > 0)
-        {
-            std::cout << std::hex << std::bitset<8>(currentByte).to_ullong() << " ";
-            cloudBytes.push_back(currentByte);
-        }
-        currentPos++;
-
-        if(currentPos % 2 == 0)
-        {
-            uint16_t cloudData = (cloudBytes[currentPos-1] << 8) | cloudBytes[currentPos-2];
-            cloudDataBytes.push_back(cloudData);
-        }
-    }
-    std::cout << std::endl;
-
-    //if(m_lidar->read(&currentByte, sizeof(currentByte)) > 0);
-    //if(m_lidar->read(&currentByte, sizeof(currentByte)) > 0);
-
-    if(!Checksum(cloudHeader, &cloudBytes16))
-    {
-        std::cout << "Error: Cloud checksum failed" << std::endl;
-        return false;
-    }
-
-    CloudData_Compute(cloudHeader, &cloudBytes16);
-    */
 /*
     std::cout << "Cloud distance: ";
     std::cout << std::dec;
@@ -567,18 +530,16 @@ bool YDLidarX4::RespHeader(struct RespHeader* respHeader, const uint8_t& cmd)
 
 bool YDLidarX4::CloudData_Compute(const struct CloudHeader* const cloudHeader, std::vector<uint16_t>* cloudData)
 {
-    double angle_fsa = cloudHeader->fsa / 64.0;
-    double angle_lsa = cloudHeader->lsa / 64.0;
+    double angle_fsa = (cloudHeader->fsa >> 1) / 64.0;
+    double angle_lsa = (cloudHeader->lsa >> 1) / 64.0;
     double angle_i = cloudHeader->lsn != 1 ? 
-        ((cloudHeader->lsa - cloudHeader->fsa) / 64.0) / (cloudHeader->lsn - 1) : 0;
-
-    /*
+        (angle_lsa - angle_fsa) / (cloudHeader->lsn - 1) : 0;
+    
     if(cloudData->size() != cloudHeader->lsn)
     {
         std::cout << "Error: cloudData and lsn are not the same size" << std::endl;
         return false;
     }
-    */
 
     std::cout << "Angle: " << angle_fsa << " " << angle_lsa << " " << angle_i << std::endl;
     std::cout << "Points: ";
@@ -603,8 +564,6 @@ bool YDLidarX4::CloudData_Compute(const struct CloudHeader* const cloudHeader, s
         std::cout << std::dec << distance << " " << angle << " | "; 
     }
     std::cout << std::endl;
-
-    Checksum(cloudHeader, cloudData);
 
     return true;
 }
@@ -635,7 +594,7 @@ bool YDLidarX4::Checksum(const struct CloudHeader* const cloudHeader, std::vecto
     {
         checksum ^= it;
     }
-    
+
 //==== DEBUG ====
 #if _DEBUG_ == TRUE
     std::cout << "Checksum: " << std::hex << std::bitset<16>(checksum).to_ullong() << std::endl;
