@@ -77,7 +77,8 @@ class YDLidarX4
           * @param motor_speedCtrl given as m_sctr in the datasheet
           * @param robot_radius ...
           */
-        YDLidarX4(EventQueue* evQueue, PinName tx, PinName rx, PinName motor_enable, PinName device_enable, PinName motor_speedCtrl, const int& robot_radius);
+        YDLidarX4(EventQueue* evQueue, PinName tx, PinName rx, PinName motor_enable, PinName device_enable, PinName motor_speedCtrl, 
+            const int& robot_radius, const int& table_radius);
 
         ~YDLidarX4();
 
@@ -119,7 +120,10 @@ class YDLidarX4
 
         EventQueue* m_evQueue;
 
-        const int m_robot_radius;
+        const int m_distance_min;
+        const int m_distance_max;
+
+
 
         //Internal serial used to communicate with the lidar
         BufferedSerial* m_lidar;
@@ -157,6 +161,9 @@ class YDLidarX4
         const int ENABLED = 1;
         const int DISABLED = 0;
 
+        //Min and max distance scannable by the lidar
+        const static uint16_t MIN_DISTANCE_SCANNABLE = 120; //120 mm
+        const static uint16_t MAX_DISTANCE_SCANNABLE = 10'000; //10'000 mm
         
         //Speed motor variable is used of pull-down (0V .. 5V)
         const int MOTOR_MAX_SPEED = 0;
