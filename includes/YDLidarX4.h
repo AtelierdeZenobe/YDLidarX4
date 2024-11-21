@@ -72,13 +72,15 @@ class YDLidarX4
           *
           * @note By default, during the initialization, m_en and dev_en are disabled
           *
+          * @param evQueue given as m_en in the datasheet
           * @param motor_enable given as m_en in the datasheet
           * @param device_enable given as dev_en in the datasheet
           * @param motor_speedCtrl given as m_sctr in the datasheet
           * @param robot_radius ...
+          * @param table_radius ...
           */
-        YDLidarX4(EventQueue* evQueue, PinName tx, PinName rx, PinName motor_enable, PinName device_enable, PinName motor_speedCtrl, 
-            const int& robot_radius, const int& table_radius);
+        YDLidarX4(std::unique_ptr<EventQueue> const& evQueue, PinName tx, PinName rx, PinName motor_enable, 
+            PinName device_enable, PinName motor_speedCtrl, int const& robot_radius, int const& table_radius);
 
         ~YDLidarX4();
 
@@ -103,45 +105,53 @@ class YDLidarX4
 
         /**
           * @brief Function to get the hardware and software informations of the device
+          *
+          * @param show Specifies if the results are to be shown in the console or not
           */
-        void DeviceInfo(void);
+        void DeviceInfo(bool show = false);
 
         /**
           * @brief Function to get the health status of the device
+          *
+          * @param show Specifies if the results are to be shown in the console or not
+          *
           */
-        void HealthStatus(void);
+        void HealthStatus(bool show = false);
 
-        void CloudData_Show();
+        /**
+          * @brief Function used to show the cloudData values, stored in the class
+          */
+        void CloudData_Show(void);
 
     private:
         DigitalOut m_motor_enable;
         DigitalOut m_device_enable;
         PwmOut m_motor_speedCtrl;
 
-        EventQueue* m_evQueue;
+        std::unique_ptr<EventQueue> const& m_evQueue;
 
-        const int m_distance_min;
-        const int m_distance_max;
-
-
+        int const m_distance_min;
+        int const m_distance_max;
 
         //Internal serial used to communicate with the lidar
-        BufferedSerial* m_lidar;
+        std::unique_ptr<BufferedSerial> const m_lidar;
 
         void Flush(int flush);
-        void Send(const uint8_t& cmd);
-        bool RespHeader(struct RespHeader* respHeader, const uint8_t& cmd);
-        void RespDeviceInfo(struct DeviceInfo* const deviceInfo);
-        void RespDeviceInfo_Show(const struct DeviceInfo* const deviceInfo);
-        void RespHealthStatus(struct HealthStatus* const healthStatus);
-        void RespHealthStatus_Show(const struct HealthStatus* const healthStatus);
+        void Send(uint8_t const& cmd);
+        //bool RespHeader(struct RespHeader* respHeader, const uint8_t& cmd);
+        bool RespHeader(std::shared_ptr<struct RespHeader> const& respHeader, uint8_t const& cmd);
+        void RespDeviceInfo(std::shared_ptr<struct DeviceInfo> const& deviceInfo);
+        void RespDeviceInfo_Show(std::shared_ptr<struct DeviceInfo const> const& deviceInfo);
+        void RespHealthStatus(std::shared_ptr<struct HealthStatus> const& healthStatus);
+        void RespHealthStatus_Show(std::shared_ptr<struct HealthStatus const> const& healthStatus);
         void RespStopScan(void);
-        bool RespStartScan(struct CloudHeader* const cloudHeader);
-
+        //bool RespStartScan(struct CloudHeader* const cloudHeader);
+        bool RespStartScan(std::shared_ptr<struct CloudHeader> const& cloudHeader);
 
 
         //==== Cloud functions ====
-        bool CloudData_Compute(const struct CloudHeader* const cloudHeader, std::vector<uint16_t>* cloudData);
+        //bool CloudData_Compute(const struct CloudHeader* const cloudHeader, std::vector<uint16_t>* cloudData);
+        bool CloudData_Compute(std::shared_ptr<struct CloudHeader const> const& cloudHeader, std::shared_ptr<std::vector<uint16_t> const> const& cloudData);
         
         /**
           * @brief Function used to check if the received cloud data are corrupted or not
@@ -149,56 +159,55 @@ class YDLidarX4
           * @param cloudHeader the cloudHeader package sent by the lidar
           * @param cloudData the cloudData package sent by the lidar
           */
-        bool Checksum(const struct CloudHeader* const cloudHeader, std::vector<uint16_t>* cloudData);
-
-
+        //bool Checksum(const struct CloudHeader* const cloudHeader, std::vector<uint16_t>* cloudData);
+        bool Checksum(std::shared_ptr<struct CloudHeader const> const& cloudHeader, std::shared_ptr<std::vector<uint16_t> const> const& cloudData);
  
         //Bauderate used by the lidar to communicate
-        const int BAUDERATE = 128'000;
+        static int const BAUDERATE = 128'000;
 
-        const double RAD_TO_DEG = 180.0 / std::acos(-1);
+        double const RAD_TO_DEG = 180.0 / std::acos(-1);
 
-        const int ENABLED = 1;
-        const int DISABLED = 0;
+        static int const ENABLED = 1;
+        static int const DISABLED = 0;
 
         //Min and max distance scannable by the lidar
-        const static uint16_t MIN_DISTANCE_SCANNABLE = 120; //120 mm
-        const static uint16_t MAX_DISTANCE_SCANNABLE = 10'000; //10'000 mm
+        static uint16_t const MIN_DISTANCE_SCANNABLE = 120; //120 mm
+        static uint16_t const MAX_DISTANCE_SCANNABLE = 10'000; //10'000 mm
         
         //Speed motor variable is used of pull-down (0V .. 5V)
-        const int MOTOR_MAX_SPEED = 0;
-        const int MOTOR_MIN_SPEED = 5;
+        int const MOTOR_MAX_SPEED = 0;
+        int const MOTOR_MIN_SPEED = 5;
 
         //==== CONSTANTS USED TO SEND COMMANDS TO THE LIDAR ====
-        const uint8_t CMD_START = 0xA5;
-        const uint8_t CMD_START_SCAN = 0x60;
-        const uint8_t CMD_STOP_SCAN = 0x65;
-        const uint8_t CMD_DEVICE_INFO = 0x90;
-        const uint8_t CMD_HEALTH_STATUS = 0x91;
-        const uint8_t CMD_RESTART = 0x80;
+        uint8_t const CMD_START = 0xA5;
+        uint8_t const CMD_START_SCAN = 0x60;
+        uint8_t const CMD_STOP_SCAN = 0x65;
+        uint8_t const CMD_DEVICE_INFO = 0x90;
+        uint8_t const CMD_HEALTH_STATUS = 0x91;
+        uint8_t const CMD_RESTART = 0x80;
 
         //==== CONSTANTS USED TO GET HEADER RESPONSES FROM THE LIDAR ====
-        const uint8_t RESP_HEADER_START_LSB = 0xA5;
-        const uint8_t RESP_HEADER_START_MSB = 0x5A;
+        uint8_t const RESP_HEADER_START_LSB = 0xA5;
+        uint8_t const RESP_HEADER_START_MSB = 0x5A;
 
-        const uint8_t RESP_HEADER_LENGTH_LSB_START_SCAN = 0x05;
-        const uint8_t RESP_HEADER_LENGTH_LSB_DEVICE = 0x14;
-        const uint8_t RESP_HEADER_LENGTH_LSB_HEALTH_STATUS = 0x03;
-        const uint8_t RESP_HEADER_LENGTH_MSB = 0x00;
+        uint8_t const RESP_HEADER_LENGTH_LSB_START_SCAN = 0x05;
+        uint8_t const RESP_HEADER_LENGTH_LSB_DEVICE = 0x14;
+        uint8_t const RESP_HEADER_LENGTH_LSB_HEALTH_STATUS = 0x03;
+        uint8_t const RESP_HEADER_LENGTH_MSB = 0x00;
 
-        const uint8_t RESP_HEADER_TYPE_START_SCAN = 0x81;
-        const uint8_t RESP_HEADER_TYPE_DEVICE_INFO = 0x04;
-        const uint8_t RESP_HEADER_TYPE_HEALTH_STATUS = 0x06;
+        uint8_t const RESP_HEADER_TYPE_START_SCAN = 0x81;
+        uint8_t const RESP_HEADER_TYPE_DEVICE_INFO = 0x04;
+        uint8_t const RESP_HEADER_TYPE_HEALTH_STATUS = 0x06;
 
-        const int RESP_SIZE_DEVICE_INFO = 20;
-        const int RESP_SIZE_DEVICE_INFO_SERIAL_NUMBER = 16;
-        const int RESP_SIZE_HEALTH_STATUS = 3;
-        const int RESP_SIZE_STOP_SCAN = 1;
+        int const RESP_SIZE_DEVICE_INFO = 20;
+        int const RESP_SIZE_DEVICE_INFO_SERIAL_NUMBER = 16;
+        int const RESP_SIZE_HEALTH_STATUS = 3;
+        int const RESP_SIZE_STOP_SCAN = 1;
 
         //==== CONSTANTS USED TO GET THE CLOUD FROM THE LIDAR ====
-        const uint16_t CLOUD_HEADER_SIZE = 0x5;
-        const uint16_t CLOUD_HEADER_START = 0xaa55;
+        uint16_t const CLOUD_HEADER_SIZE = 0x5;
+        uint16_t const CLOUD_HEADER_START = 0xaa55;
 
-        const static int CLOUD_DATA_ARRAY_SIZE = 360; //360 values in the array corresponding to each degree of a circle
+        static int const CLOUD_DATA_ARRAY_SIZE = 360; //360 values in the array corresponding to each degree of a circle
         int m_cloudData[CLOUD_DATA_ARRAY_SIZE] = {};
 };
